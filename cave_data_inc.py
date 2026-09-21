@@ -1,0 +1,26 @@
+cave_texts = [
+    "IT'S DANGEROUS TO GO", "ALONE! TAKE THIS.",
+    "TAKE ANY ONE YOU WANT.", "",
+    "MASTER USING IT AND", "YOU CAN HAVE THIS.",
+    "MASTER USING IT AND", "YOU CAN HAVE THIS.",
+    "TAKE ANY ROAD YOU WANT.", "",
+    "SECRET IS IN THE TREE", "AT THE DEAD-END.",
+    "LET'S PLAY MONEY", "MAKING GAME.",
+    "PAY ME FOR THE DOOR", "REPAIR CHARGE.",
+    "SHOW THIS TO THE", "OLD WOMAN.",
+    "MEET THE OLD MAN", "AT THE GRAVE.",
+    "BUY MEDICINE BEFORE", "YOU GO.",
+    "PAY ME AND I'LL TALK.", "",
+    "PAY ME AND I'LL TALK.", "",
+    "BUY SOMETHIN' WILL YA!", "",
+    "BUY SOMETHIN' WILL YA!", "",
+    "BOY? THIS IS", "REALLY EXPENSIVE!",
+    "BOY? THIS IS", "REALLY EXPENSIVE!",
+    "IT'S A SECRET", "TO EVERYBODY.",
+    "IT'S A SECRET", "TO EVERYBODY.",
+    "IT'S A SECRET", "TO EVERYBODY."
+]
+
+cave_items = [63, 1, 63, 32, 63, 26, 63, 2, 63, 63, 3, 63, 63, 63, 63, 63, 63, 63, 24, 24, 24, 63, 63, 63, 63, 21, 63, 63, 63, 63, 31, 63, 32, 24, 24, 24, 24, 24, 24, 28, 0, 8, 28, 25, 6, 28, 4, 34, 25, 18, 4, 63, 24, 63, 63, 24, 63, 63, 24, 63]
+
+cave_prices = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 10, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 0, 68, 5, 10, 20, 10, 30, 50, 130, 20, 80, 160, 100, 60, 90, 100, 10, 80, 250, 60, 0, 30, 0, 0, 100, 0, 0, 10, 0]

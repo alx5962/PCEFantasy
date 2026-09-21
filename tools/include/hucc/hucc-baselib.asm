@@ -1,0 +1,911 @@
+; ***************************************************************************
+; ***************************************************************************
+;
+; hucc-baselib.asm
+;
+; Basic library functions provided (mostly) as macros.
+;
+; Copyright John Brandwood 2024-2025.
+;
+; Distributed under the Boost Software License, Version 1.0.
+; (See accompanying file LICENSE_1_0.txt or copy at
+;  http://www.boost.org/LICENSE_1_0.txt)
+;
+; ***************************************************************************
+; ***************************************************************************
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; Make certain System Card variables accessible to HuCC.
+
+_irq_cnt	.alias	irq_cnt
+_joynow		.alias	joynow
+_joytrg		.alias	joytrg
+_joy6now	.alias	joy6now
+_joy6trg	.alias	joy6trg
+_bg_x1		.alias	bg_x1
+_bg_y1		.alias	bg_y1
+_bg_x2		.alias	bg_x2
+_bg_y2		.alias	bg_y2
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall dump_screen( void );
+;
+; THIS IS AN ILLEGAL INSTRUCTION ONLY IMPLEMENTED BY THE TGEMU EMULATOR!
+
+_dump_screen:	db	0x33
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall abort( void );
+;
+; THIS IS AN ILLEGAL INSTRUCTION ONLY IMPLEMENTED BY THE TGEMU EMULATOR!
+
+_abort:		db	0xE2
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall exit( int value<acc> );
+;
+; THIS IS AN ILLEGAL INSTRUCTION ONLY IMPLEMENTED BY THE TGEMU EMULATOR!
+
+_exit.1:	tax				; Put the return code into X.
+		db	0x63
+
+.hang:		bra	.hang			; Hang if used in normal code.
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall __macro cd_execoverlay( unsigned char ovl_index<acc> );
+;
+; Execute program overlay from disc
+;
+; N.B. This does not return, even if there's an error.
+
+		.macro	_cd_execoverlay.1
+		tax
+		jmp	exec_overlay
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __nop set_far_base( unsigned char data_bank<_bp_bank>, unsigned char *data_addr<_bp> );
+; void __fastcall set_far_offset( unsigned int offset<_bp>, unsigned char data_bank<_bp_bank>, unsigned char *data_addr<acc> );
+
+_set_far_offset.3:
+		clc
+		adc.l	<_bp
+		sta.l	<_bp
+		tya
+		and	#$1F
+		adc.h	<_bp
+		tay
+		and	#$1F
+		ora	#$60
+		sta.h	<_bp
+		tya
+		ror	a
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		clc
+		adc	<_bp_bank
+		sta	<_bp_bank
+		rts
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __macro reset_mpr2( void );
+; void __fastcall __macro reset_mpr34( void );
+;
+; void * __fastcall __macro set_mpr2( void __far *addr<_bp_bank:_bp> );
+; void * __fastcall __macro set_mpr34( void __far *addr<_bp_bank:_bp> );
+;
+; void * __fastcall __macro far_set_mpr2( void );
+; void * __fastcall __macro far_set_mpr34( void );
+
+_reset_mpr2	.macro
+	.if	SUPPORT_SGX
+		lda	#$F9
+	.else
+		lda	#$87
+	.endif
+		tam2
+		.endm
+
+_reset_mpr34	.macro
+		lda	#CONST_BANK + _bank_base
+		tam3
+		inc	a
+		tam4
+		.endm
+
+_farset_mpr2.1	.macro
+		lda	<_bp_bank
+		tam2
+		lda.l	<_bp
+		ldy.h	<_bp
+		.endm
+
+_farset_mpr34.1	.macro
+		lda	<_bp_bank
+		tam3
+		inc	a
+		tam4
+		lda.l	<_bp
+		ldy.h	<_bp
+		.endm
+
+_far_set_mpr2	.macro
+		lda	<_bp_bank
+		tam2
+		lda.l	<_bp
+		ldy.h	<_bp
+		.endm
+
+_far_set_mpr34	.macro
+		lda	<_bp_bank
+		tam3
+		inc	a
+		tam4
+		lda.l	<_bp
+		ldy.h	<_bp
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall __macro ac_exists( void );
+
+_ac_exists	.macro
+		cla
+		ldy	ACD_FLAG
+		cpy	#ACD_ID
+		bne	!+
+		inc	a
+!:		cly
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall __macro _sgx_detect( void );
+
+_sgx_detect	.macro
+		lda	sgx_detected
+		cly
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro peek( unsigned int addr<__ptr> );
+
+_peek.1		.macro
+		lda	[__ptr]
+		cly
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro peekw( unsigned int addr<__ptr> );
+
+_peekw.1	.macro
+		lda	[__ptr]
+		pha
+		ldy	#1
+		lda	[__ptr], y
+		tay
+		pla
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __macro poke( unsigned int addr<__poke>, unsigned char with<acc> );
+;
+; N.B. Because the <acc> value can be a complex C calculation, it isn't safe
+; to use __ptr as the destination, which can be overwritten in C macros.
+
+_poke.2		.macro
+		sta	[__poke]
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __macro pokew( unsigned int addr<__poke>, unsigned int with<acc> );
+;
+; N.B. Because the <acc> value can be a complex C calculation, it isn't safe
+; to use __ptr as the destination, which can be overwritten in C macros.
+
+_pokew.2	.macro
+		sta	[__poke]
+		tya
+		ldy	#1
+		sta	[__poke], y
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall __macro clock_hh( void );
+; unsigned char __fastcall __macro clock_mm( void );
+; unsigned char __fastcall __macro clock_ss( void );
+; unsigned char __fastcall __macro clock_tt( void );
+;
+; N.B. HuC stores the clock as binary, HuCC stores it as BCD.
+
+_clock_hh	.macro
+		lda	__clock_hh
+		jsr	bcd_byte_to_bin
+		.endm
+
+_clock_mm	.macro
+		lda	__clock_mm
+		jsr	bcd_byte_to_bin
+		.endm
+
+_clock_ss	.macro
+		lda	__clock_ss
+		jsr	bcd_byte_to_bin
+		.endm
+
+_clock_tt	.macro
+		lda	__clock_tt
+		jsr	bcd_byte_to_bin
+		.endm
+
+		; HuC returns binary values for these clock functions.
+
+bcd_byte_to_bin:tay
+		lsr	a
+		lsr	a
+		lsr	a
+		lsr	a
+		say
+		clc
+		and	#$0F
+		adc	.table, y
+		cly
+		rts
+
+.table:		db	0
+		db	10
+		db	20
+		db	30
+		db	40
+		db	50
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __macro clock_reset( void );
+
+_clock_reset	.macro
+		stz	__clock_tt
+		stz	__clock_ss
+		stz	__clock_mm
+		stz	__clock_hh
+		.endm
+
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro joy( unsigned char which<acc> );
+
+_joy.1		.macro
+		tax
+		lda	joynow, x
+	.if	SUPPORT_6BUTTON
+		ldy	joy6now, x
+	.else
+		cly
+	.endif
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro joytrg( unsigned char which<acc> );
+
+_joytrg.1	.macro
+		tax
+		lda	joytrg, x
+	.if	SUPPORT_6BUTTON
+		ldy	joy6trg, x
+	.else
+		cly
+	.endif
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro joybuf( unsigned char which<acc> );
+
+_joybuf.1	.macro
+	.if	HUC_JOY_EVENTS
+		tax
+		lda	joybuf, x
+	.if	SUPPORT_6BUTTON
+		ldy	joy6buf, x
+	.else
+		cly
+	.endif
+	.else
+		.fail	You must enable HUC_JOY_EVENTS in your hucc-config.inc!
+	.endif
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall __macro get_joy_events( unsigned char which<acc> );
+;
+; N.B. This is just a version of joybuf() that clears the accumulated events.
+
+		.macro	_get_joy_events.1
+	.if	HUC_JOY_EVENTS
+		tax
+		lda	joybuf, x
+		stz	joybuf, x
+	.if	SUPPORT_6BUTTON
+		ldy	joy6buf, x
+		stz	joy6buf, x
+	.else
+		cly
+	.endif
+	.else
+	.if	ACCUMULATE_JOY
+		tax
+		lda	joytrg, x
+		stz	joytrg, x
+	.if	SUPPORT_6BUTTON
+		ldy	joy6trg, x
+		stz	joy6trg, x
+	.else
+		cly
+	.endif
+	.else
+		.fail	You must enable HUC_JOY_EVENTS or ACCUMULATE_JOY in your hucc-config.inc!
+	.endif
+	.endif
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall __macro clear_joy_events( unsigned char mask<acc> );
+
+		.macro	_clear_joy_events.1
+		php
+		sei
+		and	#(1 << MAX_PADS) - 1
+		ldx	#$FF
+.loop:		inx
+		lsr	a
+		bcc	.next
+	.if	HUC_JOY_EVENTS
+		stz	joybuf, x
+	.if	SUPPORT_6BUTTON
+		stz	joy6buf, x
+	.endif
+	.else
+	.if	ACCUMULATE_JOY
+		stz	joytrg, x
+	.if	SUPPORT_6BUTTON
+		stz	joy6trg, x
+	.endif
+	.else
+		.fail	You must enable HUC_JOY_EVENTS or ACCUMULATE_JOY in your hucc-config.inc!
+	.endif
+	.endif
+.next:		bne	.loop
+		plp
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; void __fastcall srand( unsigned char seed<acc> );
+
+	.ifndef	HUCC_NO_DEFAULT_RANDOM
+_srand.1	.macro
+		tay
+		jsr	init_random
+		.endm
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned int __fastcall rand( void );
+; unsigned char __fastcall rand8( void );
+
+	.ifndef	HUCC_NO_DEFAULT_RANDOM
+_rand:		jsr	get_random		; Random in A, preserve Y.
+		tay
+		jmp	get_random		; Random in A, preserve Y.
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall random8( unsigned char limit<acc> );
+;
+; IN :	A = range (0..255)
+; OUT : A = random number interval 0 <= x < A
+
+	.ifndef	HUCC_NO_DEFAULT_RANDOM
+
+_random8.1:	tay				; Preserve the limit.
+		jsr	get_random		; Random in A, preserve Y.
+
+		jsr	__muluchar
+		tya				; Do a 8.0 x 0.8 fixed point
+		cly				; fractional multiply.
+		rts
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall random( unsigned char limit<acc> );
+;
+; IN :	A = range (0..128), 129..255 is treated as 128
+; OUT : A = random number interval 0 <= x < A
+
+	.ifndef	HUCC_NO_DEFAULT_RANDOM
+
+_random.1:	tay				; Preserve the limit.
+		jsr	get_random		; Random in A, preserve Y.
+
+		cpy	#128			; Check the limit.
+		bcc	!+
+
+		and	#$7F			; Just mask the random if
+		cly				; the limit is >= 128.
+		rts
+
+!:		jsr	__muluchar
+		tya				; If the limit is < 128 then
+		cly				; do a 8.0 x 0.8 fixed point
+		rts				; fractional multiply.
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; unsigned char __fastcall __builtin_ffs( unsigned int value<__temp> );
+
+		.proc	___builtin_ffs.1
+
+		lda.l	<__temp
+		ldy	#-16
+
+.search:	lsr.h	<__temp
+		ror	a
+		bcs	.found
+		iny
+		bne	.search
+		bra	.finished
+
+.found:		tya				; CS, return 17 + y.
+		adc	#16
+
+.finished:	tax				; Put return code in X.
+		cly				; Return code in Y:X, X -> A.
+
+		leave				; Return and copy X -> A.
+
+		.endp
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-string.h, but defined here because they're macros!
+;
+; int __fastcall __macro memcmp( unsigned char *destination<_di>, unsigned char *source<_bp>, unsigned int count<acc> );
+
+_memcmp.3	.macro
+		stz	<_bp_bank		; Map the source string.
+		call	_farmemcmp.3
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro get_color( unsigned int index<VCE_CTA> );
+
+_get_color.1	.macro
+		lda.l	VCE_CTR
+		ldy.h	VCE_CTR
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro fade_to_black( unsigned int __far *from<_bp_bank:_bp>, unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char value_to_sub<_ah> );
+; void __fastcall __macro fade_to_white( unsigned int __far *from<_bp_bank:_bp>, unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char value_to_add<_ah> );
+; void __fastcall __macro cross_fade_to( unsigned int __far *from<_bp_bank:_bp>, unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char which_component<_ah );
+;
+; void __fastcall __macro far_fade_to_black( unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char value_to_sub<_ah> );
+; void __fastcall __macro far_fade_to_white( unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char value_to_add<_ah> );
+; void __fastcall __macro far_cross_fade_to( unsigned int *destination<_di>, unsigned char num_colors<_al>, unsigned char which_component<_ah );
+
+		.macro	_fade_to_black.4
+		ldy	<_bp_bank
+		call	fade_to_black
+		.endm
+
+		.macro	_fade_to_white.4
+		ldy	<_bp_bank
+		call	fade_to_white
+		.endm
+
+		.macro	_cross_fade_to.4
+		ldy	<_bp_bank
+		call	cross_fade_to
+		.endm
+
+		.macro	_far_fade_to_black.3
+		ldy	<_bp_bank
+		call	fade_to_black
+		.endm
+
+		.macro	_far_fade_to_white.3
+		ldy	<_bp_bank
+		call	fade_to_white
+		.endm
+
+		.macro	_far_cross_fade_to.3
+		ldy	<_bp_bank
+		call	cross_fade_to
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro set_xres( unsigned int x_pixels<_ax> );
+; void __fastcall __macro sgx_set_xres( unsigned int x_pixels<_ax> );
+;
+; void __fastcall set_xres( unsigned int x_pixels<_ax>, unsigned char blur_flag<_bl> );
+; void __fastcall sgx_set_xres( unsigned int x_pixels<_ax>, unsigned char blur_flag<_bl> );
+
+_set_xres.1	.macro
+		lda	#XRES_SOFT
+		sta	<_bl
+		call	_set_xres.2
+		.endm
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_set_xres.1
+		lda	#XRES_SOFT
+		sta	<_bl
+		call	_sgx_set_xres.2
+		.endm
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; unsigned int __fastcall __macro vram_addr( unsigned char bat_x<_al>, unsigned char bat_y<_ah> );
+; unsigned int __fastcall __macro sgx_vram_addr( unsigned char bat_x<_al>, unsigned char bat_y<_ah> );
+
+		.macro	_vram_addr.2
+		cla
+		bit	vdc_bat_width
+		bmi	!w128+
+		bvs	!w64+
+!w32:		lsr	<_ah
+		ror	a
+!w64:		lsr	<_ah
+		ror	a
+!w128:		lsr	<_ah
+		ror	a
+		ora	<_al
+		ldy	<_ah
+		.endm
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_vram_addr.2
+		cla
+		bit	sgx_bat_width
+		bmi	!w128+
+		bvs	!w64+
+!w32:		lsr	<_ah
+		ror	a
+!w64:		lsr	<_ah
+		ror	a
+!w128:		lsr	<_ah
+		ror	a
+		ora	<_al
+		ldy	<_ah
+		.endm
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; unsigned int __fastcall __macro get_vram( unsigned int address<_di> );
+; void __fastcall __macro put_vram( unsigned int address<_di>, unsigned int data<acc> );
+;
+; unsigned int __fastcall __macro sgx_get_vram( unsigned int address<_di> );
+; void __fastcall __macro sgx_put_vram( unsigned int address<_di>, unsigned int data<acc> );
+
+		.macro	_get_vram.1
+		jsr	vdc_di_to_marr
+		lda	VDC_DL
+		ldy	VDC_DH
+		.endm
+
+		.macro	_put_vram.2
+		pha
+		jsr	vdc_di_to_mawr
+		pla
+		sta	VDC_DL
+		sty	VDC_DH
+		.endm
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_get_vram.1
+		jsr	sgx_di_to_marr
+		lda	SGX_DL
+		ldy	SGX_DH
+		.endm
+
+		.macro	_sgx_put_vram.2
+		pha
+		jsr	sgx_di_to_mawr
+		pla
+		sta	SGX_DL
+		sty	SGX_DH
+		.endm
+	.endif
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro set_bgpal( unsigned char palette<_al>, unsigned char __far *data<_bp_bank:_bp> );
+; void __fastcall __macro set_bgpal( unsigned char palette<_al>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_palettes<_ah> );
+; void __fastcall __macro set_sprpal( unsigned char palette<_al>, unsigned char __far *data<_bp_bank:_bp> );
+; void __fastcall __macro set_sprpal( unsigned char palette<_al>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_palettes<_ah> );
+
+_set_bgpal.2	.macro
+		lda	#1
+		sta	<_ah
+		call	_load_palette.3
+		.endm
+
+_set_bgpal.3	.macro
+		call	_load_palette.3
+		.endm
+
+_set_sprpal.2	.macro
+		lda	#1
+		sta	<_ah
+		smb4	<_al
+		call	_load_palette.3
+		.endm
+
+_set_sprpal.3	.macro
+		smb4	<_al
+		call	_load_palette.3
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro load_vram( unsigned int vram<_di>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_words<_ax> );
+; void __fastcall __macro sgx_load_vram( unsigned int vram<_di>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_words<_ax> );
+;
+; void __fastcall __macro far_load_vram( unsigned int vram<_di>, unsigned int num_words<_ax> );
+; void __fastcall __macro sgx_far_load_vram( unsigned int vram<_di>, unsigned int num_words<_ax> );
+;
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_load_vram.3
+		ldx	#SGX_VDC_OFFSET		; Offset to SGX VDC.
+		call	load_vram_x
+		.endm
+
+		.macro	_sgx_far_load_vram.2
+		ldx	#SGX_VDC_OFFSET		; Offset to SGX VDC.
+		call	load_vram_x
+		.endm
+	.endif
+
+		.macro	_load_vram.3
+		clx				; Offset to PCE VDC.
+		call	load_vram_x
+		.endm
+
+		.macro	_far_load_vram.2
+		clx				; Offset to PCE VDC.
+		call	load_vram_x
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall __macro load_sprites( unsigned int vram<_di>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_groups<acc> );
+; void __fastcall __macro sgx_load_sprites( unsigned int vram<_di>, unsigned char __far *data<_bp_bank:_bp>, unsigned int num_groups<acc> );
+; void __fastcall __macro far_load_sprites( unsigned int vram<_di>, unsigned int num_groups<acc> );
+; void __fastcall __macro sgx_far_load_sprites( unsigned int vram<_di>, unsigned int num_groups<acc> );
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_load_sprites.3
+		stz.l	<_ax
+		asl	a
+		sta.h	<_ax
+		ldx	#SGX_VDC_OFFSET		; Offset to SGX VDC.
+		call	load_vram_x
+		.endm
+
+		.macro	_sgx_far_load_sprites.2
+		stz.l	<_ax
+		asl	a
+		sta.h	<_ax
+		ldx	#SGX_VDC_OFFSET		; Offset to SGX VDC.
+		call	load_vram_x
+		.endm
+	.endif
+
+		.macro	_load_sprites.3
+		stz.l	<_ax
+		asl	a
+		sta.h	<_ax
+		clx				; Offset to PCE VDC.
+		call	load_vram_x
+		.endm
+
+		.macro	_far_load_sprites.2
+		stz.l	<_ax
+		asl	a
+		sta.h	<_ax
+		clx				; Offset to PCE VDC.
+		call	load_vram_x
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+;
+; N.B. Declared in hucc-gfx.h, but defined here because they're macros!
+;
+; void __fastcall load_default_font( void );
+; void __fastcall sgx_load_default_font( void );
+;
+
+	.if	SUPPORT_SGX
+		.macro	_sgx_load_default_font
+		ldx	#SGX_VDC_OFFSET		; Offset to SGX VDC.
+		call	huc_monofont_x
+		.endm
+	.endif
+
+		.macro	_load_default_font
+		clx				; Offset to PCE VDC.
+		call	huc_monofont_x
+		.endm
+
+
+
+; ***************************************************************************
+; ***************************************************************************
+
+	.if	0
+__lbltsbi	.macro
+		sec			; Subtract memory from A.
+		sbc.l	#\1		; "cmp" does not set V flag!
+		bvc	!+
+		eor	#$80		; +ve if A >= memory (signed).
+!:		bmi	\2		; -ve if A  < memory (signed).
+		.endm
+
+
+__lbltswi	.macro
+		cmp.l	#\1		; Subtract memory from Y:A.
+		tya
+		sbc.h	#\1
+		bvc	!+
+		eor	#$80		; +ve if Y:A >= memory (signed).
+!:		bmi	\2		; -ve if Y:A  < memory (signed).
+		.endm
+	.endif
